@@ -1,12 +1,15 @@
 #include "raylib.h"
 #include "raymath.h"
+#include "raygui.h"
 
 #include <string>
 #include <iostream>
 #include <cmath>
 #include <cfloat>
+#include <vector>
 
 #include "map_engine.hpp"
+#include "country.hpp"
 
 #define TITLE "Arpadica"
 #define VERSION_NUM "0.0.1"
@@ -37,6 +40,7 @@ int main()
 	InitWindow(screenWidth, screenHeight, getTitle().c_str());
 	SetTargetFPS(165);
 
+	bool showMessageBox = false;
 
 	std::vector<int> glyphs;
 	for (int cp = 32; cp <= 0x017F; ++cp) glyphs.push_back(cp);
@@ -47,6 +51,28 @@ int main()
 	Font baseFontBI = LoadFontEx("./assets/fonts/Poppins/bold_italic.ttf", 96, glyphs.data(), (int)glyphs.size());
 
 	MapEngine mapEngine(screenWidth, screenHeight);
+
+	Country hungary("HUN", LIME);
+	hungary.setNames(
+		"Magyar Empire",
+		"Kingdom of Hungary",
+		"Hungarian Republic",
+		"Hungary",
+		"Hungarian Republic",
+		"Hungarian Peoples' Republic",
+		"Council Republic of Hungary"
+	);
+
+	Country austria("AUS", LIGHTGRAY);
+	austria.setNames(
+		"Süddeutsches Reich",
+		"Austrian Empire",
+		"Republic of Austria",
+		"Austria",
+		"Republic of Austria",
+		"Austrian People's Republic",
+		"Union of Austrian Soviets"
+	);
 
 	// Loading screen
 	BeginDrawing();
@@ -67,6 +93,13 @@ int main()
 	camera.rotation = 0.0f;
 	camera.zoom = 1.0f;
 
+	const float ZOOM_MIN = 0.1f;
+	const float ZOOM_MAX = 10.0f;
+	const float ZOOM_SPEED = 0.2f;
+	const float ZOOM_SMOOTHNESS = 0.5f;
+
+	float targetZoom = camera.zoom;
+
 	State selectedState;
 	string stateInfo = "";
 
@@ -74,10 +107,34 @@ int main()
 	{
 		SetWindowTitle(getTitle((float)GetFPS()).c_str());
 
+		float dt = GetFrameTime();
+
 		// Zoom
-		camera.zoom = expf(logf(camera.zoom) + ((float)GetMouseWheelMove()*0.1f));
-		if (camera.zoom > 10.0f) camera.zoom = 10.0f;
-		else if (camera.zoom < 0.1f) camera.zoom = 0.1f;
+		float wheel = GetMouseWheelMove();
+		if (wheel != 0.0f)
+		{
+			// Zoom toward mouse position
+			Vector2 mouseScreen = GetMousePosition();
+			Vector2 preWorld = GetScreenToWorld2D(mouseScreen, camera);
+
+			// Update target zoom exponentially by wheel input
+			targetZoom *= expf(wheel * ZOOM_SPEED);
+			targetZoom = Clamp(targetZoom, ZOOM_MIN, ZOOM_MAX);
+
+			// Smoothly approach target zoom
+			float t = 1.0f - powf(0.001f, dt * ZOOM_SMOOTHNESS);
+			camera.zoom = Lerp(camera.zoom, targetZoom, t);
+
+			Vector2 postWorld = GetScreenToWorld2D(mouseScreen, camera);
+			camera.target.x += preWorld.x - postWorld.x;
+			camera.target.y += preWorld.y - postWorld.y;
+		}
+		else
+		{
+			// Keep smoothing even without new wheel input
+			float t = 1.0f - powf(0.001f, dt * ZOOM_SMOOTHNESS);
+			camera.zoom = Lerp(camera.zoom, targetZoom, t);
+		}
 
 		// Panning
 		if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
@@ -130,6 +187,21 @@ int main()
             //DrawText(stateInfo.c_str(), 10, screenHeight - 30, 16, YELLOW);
 			DrawTextEx(baseFont, stateInfo.c_str(), {10, (float)(screenHeight - 30)}, 28, 1, YELLOW);
         }
+
+		BeginDrawing();
+            ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
+
+            if (GuiButton((Rectangle){ 24, 24, 120, 30 }, "#191#Show Message")) showMessageBox = true;
+
+            if (showMessageBox)
+            {
+                int result = GuiMessageBox((Rectangle){ 85, 70, 250, 100 },
+                    "#191#Message Box", "Hi! This is a message!", "Nice;Cool");
+
+                if (result >= 0) showMessageBox = false;
+            }
+
+        EndDrawing();
 
 		EndDrawing();
 

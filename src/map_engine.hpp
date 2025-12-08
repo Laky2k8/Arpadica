@@ -1,3 +1,6 @@
+#ifndef ARPADICA_MAPENGINE_H
+#define ARPADICA_MAPENGINE_H
+
 #include "raylib.h"
 #include "rlgl.h"
 #include "json.hpp"
@@ -682,3 +685,5 @@ class MapEngine
 			return State{};
 		}
 };
+
+#endif
