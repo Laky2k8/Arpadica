@@ -25,14 +25,18 @@ string map_file = "./assets/maps/map.geojson";
 string heightmap = "./assets/maps/heightmap.jpg";
 string colormap = "./assets/maps/colormap.jpg";
 
-const int mainMapTexWidth = 4096;
-const int mainMapTexHeight = 2048;
+const int mainMapTexWidth = 16384;
+const int mainMapTexHeight = 8192;
 const string overlayShader_fs = "assets/shaders/map_overlay.fs";
 const string overlayShader_vs = "assets/shaders/map_overlay.vs";
+
+int CountrySelectorScrollIndex = 0;
+int CountrySelectorActive = 0;
 
 std::string getTitle(float fps = -1);
 
 void renderMapOverlay(MapEngine& mapEngine, RenderTexture2D& targetTex, Camera2D& camera, int screenWidth, int screenHeight);
+Vector2 mouseToMap(Ray ray, Vector3 mapPosition, float sizeX, float sizeZ, MapEngine& mapEngine);
 
 int main() 
 {
@@ -48,6 +52,9 @@ int main()
 	Font baseFontB = LoadFontEx("./assets/fonts/Poppins/bold.ttf", 96, glyphs.data(), (int)glyphs.size());
 	Font baseFontBI = LoadFontEx("./assets/fonts/Poppins/bold_italic.ttf", 96, glyphs.data(), (int)glyphs.size());
 
+	GuiSetStyle(DEFAULT, TEXT_SIZE, 24);
+	GuiSetFont(baseFont);
+
 	/* CAMERA */
 	Camera camera = { 0 };
 	camera.position = (Vector3){ 18.0f, 21.0f, 18.0f };     // Camera position
@@ -56,19 +63,42 @@ int main()
 	camera.fovy = 45.0f;                                    // Camera field-of-view Y
 	camera.projection = CAMERA_PERSPECTIVE;                 // Camera projection type
 
-	Camera2D overlayCam = {0}; // overlay camera for zoom
-	overlayCam.target = (Vector2){ 0, 0 };
-	overlayCam.offset = { 0, 0 };
-	overlayCam.rotation = 0.0f;
-	overlayCam.zoom = 1.0f;
-
 	
-	const float ZOOM_MIN = 10.0f;
-	const float ZOOM_MAX = 120.0f;
+	const float ZOOM_MIN = 5.0f;
+	const float ZOOM_MAX = 200.0f;
 	const float ZOOM_SPEED = 0.2f;
 	const float ZOOM_SMOOTHNESS = 0.5f;
 
-	float targetZoom = overlayCam.zoom;
+	float camDistance = Vector3Length(Vector3Subtract(camera.position, camera.target));
+	float targetDistance = camDistance;
+
+	vector<Country> countries;
+	int selectedCountry;
+
+	Country hungary("HUN", LIME);
+	hungary.setNames(
+		"Magyar Empire",
+		"Kingdom of Hungary",
+		"Hungarian Republic",
+		"Hungary",
+		"Hungarian Republic",
+		"Hungarian Peoples' Republic",
+		"Council Republic of Hungary"
+	);
+
+	Country austria("AUS", LIGHTGRAY);
+	austria.setNames(
+		"Süddeutsches Reich",
+		"Austrian Empire",
+		"Republic of Austria",
+		"Austria",
+		"Republic of Austria",
+		"Austrian People's Republic",
+		"Union of Austrian Soviets"
+	);
+
+	countries.push_back(hungary);
+	countries.push_back(austria);
 
 	/* MAIN MAP */
 	MapEngine mapEngine(mainMapTexWidth, mainMapTexHeight);
@@ -158,6 +188,11 @@ int main()
 	mapModel.materials[0].shader = overlayShader;
 	
 
+	State selectedState;
+	string stateInfo = "";
+
+	vector<State> selectedStates;
+
 	renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
 	while (!WindowShouldClose())
 	{
@@ -167,12 +202,18 @@ int main()
 		float dt = GetFrameTime();
 
 		// Zoom
-		float zoomSpeed = 5.0f;
 		float wheel = GetMouseWheelMove();
-		if (wheel != 0.0f) {
-			Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
-			camera.position = Vector3Add(camera.position, Vector3Scale(forward, wheel * zoomSpeed));
+		float t = 1.0f - powf(0.001f, dt * ZOOM_SMOOTHNESS);
+		if (wheel != 0.0f)
+		{
+			targetDistance *= expf(-wheel * ZOOM_SPEED); 
+			targetDistance = Clamp(targetDistance, ZOOM_MIN, ZOOM_MAX);
 		}
+		// Smoothly approach target distance even when wheel is idle
+		camDistance = Lerp(camDistance, targetDistance, t);
+		// Recompute camera.position along forward vector toward target
+		Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
+		camera.position = Vector3Subtract(camera.target, Vector3Scale(forward, camDistance));
 
 		// Pan with mouse
 		if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
@@ -184,6 +225,39 @@ int main()
 			camera.target.z += delta.y * 0.1f;
 		}
 
+		// State info
+		if(IsMouseButtonDown(MOUSE_BUTTON_MIDDLE))
+		{
+			Vector2 mouse = GetMousePosition();
+			Ray ray = GetMouseRay(mouse, camera);
+
+			Vector2 worldPos = mouseToMap(ray, mapPosition, sizeX, sizeZ, mapEngine);
+
+			selectedState = mapEngine.getStateAt((int)worldPos.x, (int)worldPos.y);
+			if (selectedState.id != "") {
+				stateInfo = "State ID: " + selectedState.id + " | Name: " + selectedState.name_en;
+			}
+		}
+
+		if(IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+		{
+			Vector2 mouse = GetMousePosition();
+			Ray ray = GetMouseRay(mouse, camera);
+
+			Vector2 worldPos = mouseToMap(ray, mapPosition, sizeX, sizeZ, mapEngine);
+
+			selectedState = mapEngine.getStateAt((int)worldPos.x, (int)worldPos.y);
+			if (selectedState.id != "") 
+			{
+				// Set color based on selected country
+				Color countryColor = countries[selectedCountry].getColor();
+				mapEngine.setStateColor(selectedState.id, countryColor);
+				renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
+			}
+
+			
+		}
+
 		BeginDrawing();
 
 		ClearBackground(RAYWHITE);
@@ -192,6 +266,35 @@ int main()
 		BeginMode3D(camera);
 			DrawModel(mapModel, mapPosition, 1.0f, WHITE);
 		EndMode3D();
+
+
+		if (!stateInfo.empty()) {
+            //DrawText(stateInfo.c_str(), 10, screenHeight - 30, 16, YELLOW);
+			DrawTextEx(baseFont, stateInfo.c_str(), {10, (float)(screenHeight - 30)}, 28, 1, YELLOW);
+        }
+
+
+		GuiStatusBar((Rectangle){ 0, 00, screenWidth, 48 }, NULL);
+		GuiLabel((Rectangle){ 152, 8, 200, 24 }, "Selected Country");
+
+		// GuiListView that contains all countries
+		std::string countryListStr = "";
+		for (size_t i = 0; i < countries.size(); i++)
+		{
+			countryListStr += countries[i].getId();
+			if (i < countries.size() - 1)
+			{
+				countryListStr += ";";
+			}
+		}
+
+		GuiListView((Rectangle){ 24, 8, 120, 72 }, countryListStr.c_str(), &CountrySelectorScrollIndex, &CountrySelectorActive);
+
+		// Set selected country based on active index
+		if (CountrySelectorActive >= 0 && CountrySelectorActive < (int)countries.size())
+		{
+			selectedCountry = CountrySelectorActive;
+		}
 
 
 		//DrawTexture(heightmap, screenWidth - heightmap.width - 20, 20, WHITE);
@@ -219,6 +322,35 @@ void renderMapOverlay(MapEngine& mapEngine, RenderTexture2D& targetTex, Camera2D
 			mapEngine.render_outline(camera);
 		EndMode2D();
 	EndTextureMode();
+}
+
+Vector2 mouseToMap(Ray ray, Vector3 mapPosition, float sizeX, float sizeZ, MapEngine& mapEngine)
+{
+	float denom = ray.direction.y;
+	if (fabsf(denom) > 1e-6f) {
+		float t = -ray.position.y / denom; // since plane point is (0,0,0) and normal is (0,1,0)
+		if (t >= 0.0f) {
+			Vector3 hit = Vector3Add(ray.position, Vector3Scale(ray.direction, t)); // world-space hit
+
+			// Convert world hit to map texture/local coordinates
+			// Your map spans [mapPosition.x, mapPosition.x + sizeX] in X and [mapPosition.z, mapPosition.z + sizeZ] in Z
+			float localX = hit.x - mapPosition.x; // 0..sizeX
+			float localZ = hit.z - mapPosition.z; // 0..sizeZ
+
+			// Optionally clamp
+			if (localX >= 0 && localX <= sizeX && localZ >= 0 && localZ <= sizeZ) {
+				// If your mapEngine expects pixel coords matching heightmap/colormap resolution:
+				float u = localX / sizeX;              // 0..1
+				float v = localZ / sizeZ;              // 0..1
+				int px = (int)(u * mainMapTexWidth);   // or use the geojson pixel space
+				int py = (int)(v * mainMapTexHeight);
+
+				return Vector2{ (float)px, (float)py };
+			}
+		}
+	}
+
+	return Vector2{};
 }
 
 std::string getTitle(float fps)

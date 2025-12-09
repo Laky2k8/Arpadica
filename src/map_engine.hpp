@@ -285,7 +285,7 @@ class MapEngine
 					//state.color = Color{ (unsigned char)(rand() % 156 + 100), (unsigned char)(rand() % 156 + 100), (unsigned char)(rand() % 156 + 100), 255 };
 
 					// Generate random color
-					int hash = 0;
+					/*int hash = 0;
 					for (char c : state.id) hash += c;
 
 					state.color = {
@@ -293,9 +293,9 @@ class MapEngine
 						(unsigned char)(200 + ((hash * 17) % 55)),
 						(unsigned char)(200 + ((hash * 31) % 55)),
 						200
-					};
+					};*/
 
-					//state.color = GRAY; // No color by default
+					state.color = (Color){ 255, 255, 255, 200};
 
 					//cout << "Loading geometry..." << endl;
 
