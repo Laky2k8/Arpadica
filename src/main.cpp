@@ -97,8 +97,44 @@ int main()
 		"Union of Austrian Soviets"
 	);
 
+	Country slovakia("SVK", BLUE);
+	slovakia.setNames(
+		"Slovakia",
+		"Slovakia",
+		"Slovakia",
+		"Slovakia",
+		"Slovakia",
+		"Slovakia",
+		"Slovakia"
+	);
+
+	Country czechia("CZE", Color{ 173, 216, 230, 255 });
+	czechia.setNames(
+		"Czechia",
+		"Czechia",
+		"Czechia",
+		"Czechia",
+		"Czechia",
+		"Czechia",
+		"Czechia"
+	);
+
+	Country romania("ROM", GOLD);
+	czechia.setNames(
+		"Romania",
+		"Romania",
+		"Romania",
+		"Romania",
+		"Romania",
+		"Romania",
+		"Romania"
+	);
+
 	countries.push_back(hungary);
 	countries.push_back(austria);
+	countries.push_back(slovakia);
+	countries.push_back(czechia);
+	countries.push_back(romania);
 
 	/* MAIN MAP */
 	MapEngine mapEngine(mainMapTexWidth, mainMapTexHeight);
