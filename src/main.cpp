@@ -1,3 +1,4 @@
+#define RAYGUI_IMPLEMENTATION
 #include "raylib.h"
 #include "raymath.h"
 #include "raygui.h"
@@ -20,28 +21,17 @@ using namespace std;
 const int screenWidth = 1280;
 const int screenHeight = 720;
 
-
 string map_file = "./assets/map.geojson";
+string heightmap = "./assets/heightmap.jpg";
 
-std::string getTitle(float fps = -1)
-{
-	if (fps >= 0)
-	{
-		return (string(TITLE) + " " + string(VERSION_NUM) + " - " + to_string(GetFPS()) + " FPS");
-	}
-	else
-	{
-		return (string(TITLE) + " " + string(VERSION_NUM));
-	}
-}
+std::string getTitle(float fps = -1);
 
 int main() 
 {
 	InitWindow(screenWidth, screenHeight, getTitle().c_str());
 	SetTargetFPS(165);
 
-	bool showMessageBox = false;
-
+	/* FONTS */
 	std::vector<int> glyphs;
 	for (int cp = 32; cp <= 0x017F; ++cp) glyphs.push_back(cp);
 
@@ -50,31 +40,17 @@ int main()
 	Font baseFontB = LoadFontEx("./assets/fonts/Poppins/bold.ttf", 96, glyphs.data(), (int)glyphs.size());
 	Font baseFontBI = LoadFontEx("./assets/fonts/Poppins/bold_italic.ttf", 96, glyphs.data(), (int)glyphs.size());
 
+	/* CAMERA */
+	Camera camera = { 0 };
+    camera.position = (Vector3){ 18.0f, 21.0f, 18.0f };     // Camera position
+    camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };          // Camera looking at point
+    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };              // Camera up vector (rotation towards target)
+    camera.fovy = 45.0f;                                    // Camera field-of-view Y
+    camera.projection = CAMERA_PERSPECTIVE;                 // Camera projection type
+
+	/* MAIN MAP */
 	MapEngine mapEngine(screenWidth, screenHeight);
 
-	Country hungary("HUN", LIME);
-	hungary.setNames(
-		"Magyar Empire",
-		"Kingdom of Hungary",
-		"Hungarian Republic",
-		"Hungary",
-		"Hungarian Republic",
-		"Hungarian Peoples' Republic",
-		"Council Republic of Hungary"
-	);
-
-	Country austria("AUS", LIGHTGRAY);
-	austria.setNames(
-		"Süddeutsches Reich",
-		"Austrian Empire",
-		"Republic of Austria",
-		"Austria",
-		"Republic of Austria",
-		"Austrian People's Republic",
-		"Union of Austrian Soviets"
-	);
-
-	// Loading screen
 	BeginDrawing();
 	ClearBackground(DARKBLUE);
 	DrawTextEx(baseFont, "Loading map...", {(float)(screenWidth - MeasureText("Loading map...", 20)) / 2, screenHeight / 2}, 20, 1, WHITE);
@@ -87,125 +63,74 @@ int main()
 		return 1;
 	}
 
-	Camera2D camera = {0};
-	camera.target = (Vector2){ 0, 0 };
-	camera.offset = (Vector2){ screenWidth/2.0f, screenHeight/2.0f };
-	camera.rotation = 0.0f;
-	camera.zoom = 1.0f;
+	/* HEIGHTMAP */
+	BeginDrawing();
+	ClearBackground(DARKBLUE);
+	DrawTextEx(baseFont, "Generating map model...", {(float)(screenWidth - MeasureText("Generating map model...", 20)) / 2, screenHeight / 2}, 20, 1, WHITE);
+	EndDrawing();
 
-	const float ZOOM_MIN = 0.1f;
-	const float ZOOM_MAX = 10.0f;
-	const float ZOOM_SPEED = 0.2f;
-	const float ZOOM_SMOOTHNESS = 0.5f;
+    Image image = LoadImage(heightmap.c_str());     // Earth heightmap image (RAM)
+    Texture2D heightmap = LoadTextureFromImage(image);        // Convert image to texture (VRAM)
 
-	float targetZoom = camera.zoom;
+    Mesh mapMesh = GenMeshHeightmap(image, (Vector3){ 200.0f, 1.0f, 100.0f }); // Generate heightmap mesh from image
+    Model mapModel = LoadModelFromMesh(mapMesh);                  // Load model from generated mesh
 
-	State selectedState;
-	string stateInfo = "";
+    mapModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = heightmap; // Set map diffuse heightmap
+    Vector3 mapPosition = { -8.0f, 0.0f, -8.0f };           // Define model position
+
+    UnloadImage(image);             // Unload heightmap image from RAM, already uploaded to VRAM
+
 
 	while (!WindowShouldClose())
 	{
+
 		SetWindowTitle(getTitle((float)GetFPS()).c_str());
 
-		float dt = GetFrameTime();
-
-		// Zoom
-		float wheel = GetMouseWheelMove();
-		if (wheel != 0.0f)
+		// Pan with mouse
+		if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
 		{
-			// Zoom toward mouse position
-			Vector2 mouseScreen = GetMousePosition();
-			Vector2 preWorld = GetScreenToWorld2D(mouseScreen, camera);
-
-			// Update target zoom exponentially by wheel input
-			targetZoom *= expf(wheel * ZOOM_SPEED);
-			targetZoom = Clamp(targetZoom, ZOOM_MIN, ZOOM_MAX);
-
-			// Smoothly approach target zoom
-			float t = 1.0f - powf(0.001f, dt * ZOOM_SMOOTHNESS);
-			camera.zoom = Lerp(camera.zoom, targetZoom, t);
-
-			Vector2 postWorld = GetScreenToWorld2D(mouseScreen, camera);
-			camera.target.x += preWorld.x - postWorld.x;
-			camera.target.y += preWorld.y - postWorld.y;
-		}
-		else
-		{
-			// Keep smoothing even without new wheel input
-			float t = 1.0f - powf(0.001f, dt * ZOOM_SMOOTHNESS);
-			camera.zoom = Lerp(camera.zoom, targetZoom, t);
-		}
-
-		// Panning
-		if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
 			Vector2 delta = GetMouseDelta();
-			camera.target.x -= delta.x / camera.zoom;
-			camera.target.y -= delta.y / camera.zoom;
-		}
-
-		// State selection
-		if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-		{
-			Vector2 mousePos = GetMousePosition();
-			Vector2 worldPos = {
-				(mousePos.x - camera.offset.x) / camera.zoom + camera.target.x,
-				(mousePos.y - camera.offset.y) / camera.zoom + camera.target.y
-			};
-
-			selectedState = mapEngine.getStateAt((int)worldPos.x, (int)worldPos.y);
-			if (selectedState.id != "") {
-				stateInfo = "State ID: " + selectedState.id + " | Name: " + selectedState.name_en;
-			}
+			camera.position.x += delta.x * 0.1f;
+			camera.position.z += delta.y * 0.1f;
+			camera.target.x += delta.x * 0.1f;
+			camera.target.z += delta.y * 0.1f;
 		}
 
 		BeginDrawing();
-		ClearBackground(BLUE);
 
-		BeginMode2D(camera);
+		ClearBackground(RAYWHITE);
 
-		mapEngine.render(camera);
+		BeginMode3D(camera);
 
-		if(camera.zoom > 5.0f)
-		{
-			mapEngine.render_outline(camera);
-		}
+			DrawModel(mapModel, mapPosition, 1.0f, WHITE);
 
-		EndMode2D();
+			DrawGrid(20, 1.0f);
 
-		/*DrawText(("States: " + to_string(mapEngine.getStates().size())).c_str(), 10, 10, 20, WHITE);
-        DrawText("Use mouse to explore", 10, 35, 16, LIGHTGRAY);
-		DrawText("Left Click: Get province info", 10, 55, 16, LIGHTGRAY);
-		DrawText("Control + Left Click: Paint province", 10, 75, 16, LIGHTGRAY);*/
+		EndMode3D();
 
-		DrawTextEx(baseFont, ("States: " + to_string(mapEngine.getStates().size())).c_str(), {10, 10}, 28, 1, WHITE);
-		DrawTextEx(baseFont, "Use mouse to explore", {10, 35}, 24, 1, LIGHTGRAY);
-		DrawTextEx(baseFont, "Left Click: Get province info", {10, 55}, 24, 1, LIGHTGRAY);
-		DrawTextEx(baseFont, "Control + Left Click: Paint province", {10, 75}, 24, 1, LIGHTGRAY);
+		//DrawTexture(heightmap, screenWidth - heightmap.width - 20, 20, WHITE);
+		DrawRectangleLines(screenWidth - heightmap.width - 20, 20, heightmap.width, heightmap.height, GREEN);
 
-		// Show hovered region info
-        if (!stateInfo.empty()) {
-            //DrawText(stateInfo.c_str(), 10, screenHeight - 30, 16, YELLOW);
-			DrawTextEx(baseFont, stateInfo.c_str(), {10, (float)(screenHeight - 30)}, 28, 1, YELLOW);
-        }
-
-		BeginDrawing();
-            ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
-
-            if (GuiButton((Rectangle){ 24, 24, 120, 30 }, "#191#Show Message")) showMessageBox = true;
-
-            if (showMessageBox)
-            {
-                int result = GuiMessageBox((Rectangle){ 85, 70, 250, 100 },
-                    "#191#Message Box", "Hi! This is a message!", "Nice;Cool");
-
-                if (result >= 0) showMessageBox = false;
-            }
-
-        EndDrawing();
+		DrawFPS(10, 10);
 
 		EndDrawing();
-
 	}
+
+	UnloadTexture(heightmap);     // Unload heightmap
+    UnloadModel(mapModel);         // Unload model
+
 	CloseWindow();
 	return 0;
+}
+
+std::string getTitle(float fps)
+{
+	if (fps >= 0)
+	{
+		return (string(TITLE) + " " + string(VERSION_NUM) + " - " + to_string(GetFPS()) + " FPS");
+	}
+	else
+	{
+		return (string(TITLE) + " " + string(VERSION_NUM));
+	}
 }

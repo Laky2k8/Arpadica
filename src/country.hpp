@@ -117,6 +117,8 @@ class Country
 			}
 		}
 
+		Color getColor() const { return color; }
+
 
 
 

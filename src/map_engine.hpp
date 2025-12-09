@@ -290,7 +290,7 @@ class MapEngine
 						200
 					};*/
 
-					state.color = LIGHTGRAY;
+					state.color = GRAY;
 
 					//cout << "Loading geometry..." << endl;
 
