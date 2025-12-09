@@ -128,8 +128,13 @@ class MapEngine
 	public:
 		MapEngine(int screen_w = 1280, int screen_h = 720) : screen_width(screen_w), screen_height(screen_h)
 		{
-			min_lat = min_lon = 1e9;
-			max_lat = max_lon = -1e9;
+			/*min_lat = min_lon = 1e9;
+			max_lat = max_lon = -1e9;*/
+
+			min_lon = -180.0f;
+			max_lon =  180.0f;
+			min_lat =  -90.0f;
+			max_lat =   90.0f;
 		}
 
 		~MapEngine() {}
@@ -280,7 +285,7 @@ class MapEngine
 					//state.color = Color{ (unsigned char)(rand() % 156 + 100), (unsigned char)(rand() % 156 + 100), (unsigned char)(rand() % 156 + 100), 255 };
 
 					// Generate random color
-					/*int hash = 0;
+					int hash = 0;
 					for (char c : state.id) hash += c;
 
 					state.color = {
@@ -288,9 +293,9 @@ class MapEngine
 						(unsigned char)(200 + ((hash * 17) % 55)),
 						(unsigned char)(200 + ((hash * 31) % 55)),
 						200
-					};*/
+					};
 
-					state.color = GRAY;
+					//state.color = GRAY; // No color by default
 
 					//cout << "Loading geometry..." << endl;
 
@@ -508,7 +513,7 @@ class MapEngine
 			for(const auto& state : states)
 			{
 				const Color fill_color = state.color;
-				const Color edge_color = DARKGRAY;
+				const Color edge_color = WHITE;
 
 				// Loop thru each stored polygon
 				for(size_t poly_index = 0; poly_index < state.polygons.size(); ++poly_index)
@@ -601,7 +606,7 @@ class MapEngine
 
 		void render_outline(Camera2D camera)
 		{
-			const Color edge_color = DARKGRAY;
+			const Color edge_color = WHITE;
 
 			for (const auto& state : states) {
 				for (size_t poly_index = 0; poly_index < state.polygons.size(); ++poly_index)
@@ -623,11 +628,11 @@ class MapEngine
 					
 					// Draw outline
 					for (size_t i = 0; i < polygon.size() - 1; i++) {
-						DrawLineV(polygon[i], polygon[i + 1], DARKGRAY);
+						DrawLineV(polygon[i], polygon[i + 1], edge_color);
 					}
 					// Close the polygon
 					if (polygon.size() > 2) {
-						DrawLineV(polygon.back(), polygon[0], DARKGRAY);
+						DrawLineV(polygon.back(), polygon[0], edge_color);
 					}
 
 				}
