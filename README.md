@@ -38,7 +38,7 @@ If you have G++ set up on your computer, than building the project should be as 
 ### Windows
 1. Download newest release
 2. Unzip
-3. launch `LakyStrategy.exe`
+3. launch `Arpadica.exe`
 
 ### Linux
 Linux build coming soon!
