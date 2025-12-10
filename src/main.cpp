@@ -36,6 +36,7 @@ int CountrySelectorActive = 0;
 std::string getTitle(float fps = -1);
 
 void renderMapOverlay(MapEngine& mapEngine, RenderTexture2D& targetTex, Camera2D& camera, int screenWidth, int screenHeight);
+void setupOverlayShader(Model& mapModel, Shader& overlayShader, RenderTexture2D& mainMapTex, Vector3 mapPosition, float sizeX, float sizeZ);
 Vector2 mouseToMap(Ray ray, Vector3 mapPosition, float sizeX, float sizeZ, MapEngine& mapEngine);
 
 int main() 
@@ -57,7 +58,9 @@ int main()
 
 	/* CAMERA */
 	Camera camera = { 0 };
-	camera.position = (Vector3){ 18.0f, 21.0f, 18.0f };     // Camera position
+	//camera.position = (Vector3){ 18.0f, 21.0f, 18.0f };     // Camera position
+
+	camera.position = (Vector3){ 0.0f, 100.0f, 0.01f };     // Camera position
 	camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };          // Camera looking at point
 	camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };              // Camera up vector (rotation towards target)
 	camera.fovy = 45.0f;                                    // Camera field-of-view Y
@@ -152,7 +155,7 @@ int main()
 	}
 
 	RenderTexture2D mainMapTex = LoadRenderTexture(mainMapTexWidth, mainMapTexHeight);
-	SetTextureFilter(mainMapTex.texture, TEXTURE_FILTER_BILINEAR);
+	SetTextureFilter(mainMapTex.texture, TEXTURE_FILTER_ANISOTROPIC_16X);
 
 	Camera2D mapCam = { 0 }; // Camera for main 2D map
 	mapCam.target = { 0, 0 };
@@ -186,43 +189,7 @@ int main()
 	DrawTextEx(baseFont, "Setting up shaders...", {(float)(screenWidth - MeasureText("Setting up shaders...", 20)) / 2, screenHeight / 2}, 20, 1, WHITE);
 
 	Shader overlayShader = LoadShader(overlayShader_vs.c_str(), overlayShader_fs.c_str());
-	int locOverlay = GetShaderLocation(overlayShader, "politicalMap");
-	int locOverlayMix  = GetShaderLocation(overlayShader, "overlayMix");
-	int locWorldMinMax = GetShaderLocation(overlayShader, "worldMinMax");
-
-	// Bind the overlay texture to sampler slot 1
-	SetShaderValueTexture(overlayShader, locOverlay, mainMapTex.texture);
-
-	// Blend strength
-	float overlayMix = 0.75f;
-	SetShaderValue(overlayShader, locOverlayMix, &overlayMix, SHADER_UNIFORM_FLOAT);
-
-	// Setting map size
-	float worldMinMax[4] = {
-		mapPosition.x,          // minX
-		mapPosition.x + sizeX,  // maxX
-		mapPosition.z,          // minZ
-		mapPosition.z + sizeZ   // maxZ
-	};
-	SetShaderValue(overlayShader, locWorldMinMax, worldMinMax, SHADER_UNIFORM_VEC4);
-
-	// Lighting uniforms
-	int locLightDir   = GetShaderLocation(overlayShader, "lightDir");
-	int locLightColor = GetShaderLocation(overlayShader, "lightColor");
-	int locAmbient    = GetShaderLocation(overlayShader, "ambient");
-
-	// Direction TO light 
-	Vector3 lightDir = Vector3Normalize((Vector3){ 0.2f, 1.0f, 0.2f });
-	float lightDirV[3] = { lightDir.x, lightDir.y, lightDir.z };
-	float lightColorV[3] = { 1.0f, 1.0f, 1.0f };
-	float ambient = 0.25f; 
-
-	SetShaderValue(overlayShader, locLightDir,   lightDirV,   SHADER_UNIFORM_VEC3);
-	SetShaderValue(overlayShader, locLightColor, lightColorV, SHADER_UNIFORM_VEC3);
-	SetShaderValue(overlayShader, locAmbient,    &ambient,    SHADER_UNIFORM_FLOAT);
-
-	mapModel.materials[0].shader = overlayShader;
-	
+	setupOverlayShader(mapModel, overlayShader, mainMapTex, mapPosition, sizeX, sizeZ);
 
 	State selectedState;
 	string stateInfo = "";
@@ -290,9 +257,38 @@ int main()
 				mapEngine.setStateColor(selectedState.id, countryColor);
 				renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
 			}
-
-			
 		}
+
+		// Camera controls
+		if(IsKeyDown(KEY_UP))
+		{
+			Vector3 offset = Vector3Subtract(camera.position, camera.target);
+			offset = Vector3RotateByAxisAngle(offset, (Vector3){1.0f, 0.0f, 0.0f}, 1.5f * dt);
+			camera.position = Vector3Add(camera.target, offset);
+		}
+		if(IsKeyDown(KEY_DOWN))
+		{
+			Vector3 offset = Vector3Subtract(camera.position, camera.target);
+			offset = Vector3RotateByAxisAngle(offset, (Vector3){-1.0f, 0.0f, 0.0f}, 1.5f * dt);
+			camera.position = Vector3Add(camera.target, offset);
+		}
+		if(IsKeyDown(KEY_LEFT))
+		{
+			Vector3 offset = Vector3Subtract(camera.position, camera.target);
+			offset = Vector3RotateByAxisAngle(offset, (Vector3){0.0f, 1.0f, 0.0f}, 1.5f * dt);
+			camera.position = Vector3Add(camera.target, offset);
+		}
+		if(IsKeyDown(KEY_RIGHT))
+		{
+			Vector3 offset = Vector3Subtract(camera.position, camera.target);
+			offset = Vector3RotateByAxisAngle(offset, (Vector3){0.0f, -1.0f, 0.0f}, 1.5f * dt);
+			camera.position = Vector3Add(camera.target, offset);
+		}
+		if(IsKeyDown(KEY_R))
+		{
+			camera.position = (Vector3){ 0.0f, 100.0f, 0.01f }; 
+		}
+
 
 		BeginDrawing();
 
@@ -358,6 +354,46 @@ void renderMapOverlay(MapEngine& mapEngine, RenderTexture2D& targetTex, Camera2D
 			mapEngine.render_outline(camera);
 		EndMode2D();
 	EndTextureMode();
+}
+
+void setupOverlayShader(Model& mapModel, Shader& overlayShader, RenderTexture2D& mainMapTex, Vector3 mapPosition, float sizeX, float sizeZ)
+{
+	int locOverlay = GetShaderLocation(overlayShader, "politicalMap");
+	int locOverlayMix  = GetShaderLocation(overlayShader, "overlayMix");
+	int locWorldMinMax = GetShaderLocation(overlayShader, "worldMinMax");
+
+	// Bind the overlay texture to sampler slot 1
+	SetShaderValueTexture(overlayShader, locOverlay, mainMapTex.texture);
+
+	// Blend strength
+	float overlayMix = 0.85f;
+	SetShaderValue(overlayShader, locOverlayMix, &overlayMix, SHADER_UNIFORM_FLOAT);
+
+	// Setting map size
+	float worldMinMax[4] = {
+		mapPosition.x,          // minX
+		mapPosition.x + sizeX,  // maxX
+		mapPosition.z,          // minZ
+		mapPosition.z + sizeZ   // maxZ
+	};
+	SetShaderValue(overlayShader, locWorldMinMax, worldMinMax, SHADER_UNIFORM_VEC4);
+
+	// Lighting uniforms
+	int locLightDir   = GetShaderLocation(overlayShader, "lightDir");
+	int locLightColor = GetShaderLocation(overlayShader, "lightColor");
+	int locAmbient    = GetShaderLocation(overlayShader, "ambient");
+
+	// Direction TO light 
+	Vector3 lightDir = Vector3Normalize((Vector3){ 0.2f, 1.0f, 0.2f });
+	float lightDirV[3] = { lightDir.x, lightDir.y, lightDir.z };
+	float lightColorV[3] = { 1.0f, 1.0f, 1.0f };
+	float ambient = 0.25f; 
+
+	SetShaderValue(overlayShader, locLightDir,   lightDirV,   SHADER_UNIFORM_VEC3);
+	SetShaderValue(overlayShader, locLightColor, lightColorV, SHADER_UNIFORM_VEC3);
+	SetShaderValue(overlayShader, locAmbient,    &ambient,    SHADER_UNIFORM_FLOAT);
+
+	mapModel.materials[0].shader = overlayShader;
 }
 
 Vector2 mouseToMap(Ray ray, Vector3 mapPosition, float sizeX, float sizeZ, MapEngine& mapEngine)
