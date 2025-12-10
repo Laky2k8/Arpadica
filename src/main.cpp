@@ -175,7 +175,7 @@ int main()
 
 	float sizeX = 200.0f;
 	float sizeZ = 100.0f;
-	Mesh mapMesh = GenMeshHeightmap(image, (Vector3){ sizeX, 1.0f, sizeZ }); // Generate heightmap mesh from image
+	Mesh mapMesh = GenMeshHeightmap(image, (Vector3){ sizeX, 0.75f, sizeZ }); // Generate heightmap mesh from image
 	Model mapModel = LoadModelFromMesh(mapMesh);                  // Load model from generated mesh
 
 	mapModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = colormapTex; // Set map diffuse heightmap
@@ -260,51 +260,47 @@ int main()
 		}
 
 		// Camera controls
-		if(IsKeyDown(KEY_UP))
-		{
-			float pitch = -1.0f * 1.5f * dt;
 
+		auto RecomputeBasis = [&](Camera& cam) {
+			Vector3 forward = Vector3Normalize(Vector3Subtract(cam.target, cam.position));
+			Vector3 right   = Vector3Normalize(Vector3CrossProduct(cam.up, forward));
+			cam.up          = Vector3Normalize(Vector3CrossProduct(forward, right));
+		};
+
+		// Yaw left and right
+		if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT))
+		{
+			float yaw = (IsKeyDown(KEY_LEFT) ? -1.0f : 1.0f) * 1.5f * dt;
+			Vector3 offset = Vector3Subtract(camera.position, camera.target);
+
+			offset = Vector3RotateByAxisAngle(offset, (Vector3){0,1,0}, yaw);
+			camera.position = Vector3Add(camera.target, offset);
+			camera.up = Vector3Normalize(Vector3RotateByAxisAngle(camera.up, (Vector3){0,1,0}, yaw));
+			RecomputeBasis(camera);
+		}
+
+		// Pitch up and down
+		if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_DOWN))
+		{
+			float pitch = (IsKeyDown(KEY_UP) ? -1.0f : 1.0f) * 1.5f * dt;
 			Vector3 offset = Vector3Subtract(camera.position, camera.target);
 
 			Vector3 forward = Vector3Normalize(Vector3Negate(offset));
 			Vector3 right   = Vector3Normalize(Vector3CrossProduct(camera.up, forward));
-			if (Vector3Length(right) < 1e-6f) right = (Vector3){1,0,0}; // fallback
+			if (Vector3Length(right) < 1e-6f) right = (Vector3){1,0,0};
 
 			offset = Vector3RotateByAxisAngle(offset, right, pitch);
-
 			camera.position = Vector3Add(camera.target, offset);
 			camera.up = Vector3Normalize(Vector3RotateByAxisAngle(camera.up, right, pitch));
+			RecomputeBasis(camera);
 		}
-		if(IsKeyDown(KEY_DOWN))
-		{
-			float pitch = 1.0f * 1.5f * dt;
 
-			Vector3 offset = Vector3Subtract(camera.position, camera.target);
-
-			Vector3 forward = Vector3Normalize(Vector3Negate(offset));
-			Vector3 right   = Vector3Normalize(Vector3CrossProduct(camera.up, forward));
-			if (Vector3Length(right) < 1e-6f) right = (Vector3){1,0,0}; // fallback
-
-			offset = Vector3RotateByAxisAngle(offset, right, pitch);
-
-			camera.position = Vector3Add(camera.target, offset);
-			camera.up = Vector3Normalize(Vector3RotateByAxisAngle(camera.up, right, pitch));
-		}
-		if(IsKeyDown(KEY_LEFT))
+		// Reset
+		if(IsKeyPressed(KEY_R))
 		{
-			Vector3 offset = Vector3Subtract(camera.position, camera.target);
-			offset = Vector3RotateByAxisAngle(offset, (Vector3){0.0f, 1.0f, 0.0f}, 1.5f * dt);
-			camera.position = Vector3Add(camera.target, offset);
-		}
-		if(IsKeyDown(KEY_RIGHT))
-		{
-			Vector3 offset = Vector3Subtract(camera.position, camera.target);
-			offset = Vector3RotateByAxisAngle(offset, (Vector3){0.0f, -1.0f, 0.0f}, 1.5f * dt);
-			camera.position = Vector3Add(camera.target, offset);
-		}
-		if(IsKeyDown(KEY_R))
-		{
-			camera.position = (Vector3){ 0.0f, 100.0f, 0.01f }; 
+			camera.position = (Vector3){ 0.0f, camDistance, 0.01f };
+			camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+			RecomputeBasis(camera);
 		}
 
 
