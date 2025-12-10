@@ -262,15 +262,33 @@ int main()
 		// Camera controls
 		if(IsKeyDown(KEY_UP))
 		{
+			float pitch = -1.0f * 1.5f * dt;
+
 			Vector3 offset = Vector3Subtract(camera.position, camera.target);
-			offset = Vector3RotateByAxisAngle(offset, (Vector3){1.0f, 0.0f, 0.0f}, 1.5f * dt);
+
+			Vector3 forward = Vector3Normalize(Vector3Negate(offset));
+			Vector3 right   = Vector3Normalize(Vector3CrossProduct(camera.up, forward));
+			if (Vector3Length(right) < 1e-6f) right = (Vector3){1,0,0}; // fallback
+
+			offset = Vector3RotateByAxisAngle(offset, right, pitch);
+
 			camera.position = Vector3Add(camera.target, offset);
+			camera.up = Vector3Normalize(Vector3RotateByAxisAngle(camera.up, right, pitch));
 		}
 		if(IsKeyDown(KEY_DOWN))
 		{
+			float pitch = 1.0f * 1.5f * dt;
+
 			Vector3 offset = Vector3Subtract(camera.position, camera.target);
-			offset = Vector3RotateByAxisAngle(offset, (Vector3){-1.0f, 0.0f, 0.0f}, 1.5f * dt);
+
+			Vector3 forward = Vector3Normalize(Vector3Negate(offset));
+			Vector3 right   = Vector3Normalize(Vector3CrossProduct(camera.up, forward));
+			if (Vector3Length(right) < 1e-6f) right = (Vector3){1,0,0}; // fallback
+
+			offset = Vector3RotateByAxisAngle(offset, right, pitch);
+
 			camera.position = Vector3Add(camera.target, offset);
+			camera.up = Vector3Normalize(Vector3RotateByAxisAngle(camera.up, right, pitch));
 		}
 		if(IsKeyDown(KEY_LEFT))
 		{
