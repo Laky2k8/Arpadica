@@ -8,12 +8,13 @@
 #include <cmath>
 #include <cfloat>
 #include <vector>
+#include <algorithm>
 
 #include "map_engine.hpp"
 #include "country.hpp"
 
 #define TITLE "Arpadica"
-#define VERSION_NUM "0.2.0"
+#define VERSION_NUM "0.3.0"
 #define ERROR "Arpadica::ERROR: "
 
 using namespace std;
@@ -242,7 +243,7 @@ int main()
 			}
 		}
 
-		if(IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+		if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
 		{
 			Vector2 mouse = GetMousePosition();
 			Ray ray = GetMouseRay(mouse, camera);
@@ -252,10 +253,30 @@ int main()
 			selectedState = mapEngine.getStateAt((int)worldPos.x, (int)worldPos.y);
 			if (selectedState.id != "") 
 			{
+
+				stateInfo = "State ID: " + selectedState.id + " | Name: " + selectedState.name_en;
+
 				// Set color based on selected country
-				Color countryColor = countries[selectedCountry].getColor();
+				/*Color countryColor = countries[selectedCountry].getColor();
 				mapEngine.setStateColor(selectedState.id, countryColor);
-				renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
+				renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);*/
+
+				if(std::find(selectedStates.begin(), selectedStates.end(), selectedState) == selectedStates.end()) 
+				{
+					// Select if not yet selected
+
+					selectedStates.push_back(selectedState);
+
+					mapEngine.setStateColor(selectedState.id, YELLOW);
+					renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
+				}
+				else
+				{
+					// Deselect if already selected
+					selectedStates.erase(std::remove(selectedStates.begin(), selectedStates.end(), selectedState), selectedStates.end());
+					mapEngine.setStateColor(selectedState.id, defaultStateColor);
+					renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
+				}
 			}
 		}
 
@@ -298,8 +319,15 @@ int main()
 		// Reset
 		if(IsKeyPressed(KEY_R))
 		{
-			camera.position = (Vector3){ 0.0f, camDistance, 0.01f };
-			camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+			float dist = Vector3Length(Vector3Subtract(camera.position, camera.target));
+			if (dist <= 1e-6f) dist = camDistance > 0 ? camDistance : 100.0f;
+
+			camera.up       = (Vector3){0, 1, 0};
+			camera.position = Vector3Add(camera.target, (Vector3){0.0f, dist, 0.01f});
+
+			camDistance  = dist;
+			targetDistance = dist;
+
 			RecomputeBasis(camera);
 		}
 
@@ -321,7 +349,7 @@ int main()
 
 
 		GuiStatusBar((Rectangle){ 0, 00, screenWidth, 48 }, NULL);
-		GuiLabel((Rectangle){ 152, 8, 200, 24 }, "Selected Country");
+		GuiLabel((Rectangle){ 152, 12, 200, 24 }, "Selected Country");
 
 		// GuiListView that contains all countries
 		std::string countryListStr = "";
@@ -336,6 +364,29 @@ int main()
 
 		GuiListView((Rectangle){ 24, 8, 120, 72 }, countryListStr.c_str(), &CountrySelectorScrollIndex, &CountrySelectorActive);
 
+		if(GuiButton((Rectangle){ 500, 10, 200, 28 }, "Add to Country"))
+		{
+			// Set color based on selected country
+			Color countryColor = countries[selectedCountry].getColor();
+			for(const auto& state : selectedStates)
+			{
+				mapEngine.setStateColor(state.id, countryColor);
+			}
+			selectedStates.clear();
+			renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
+		}
+
+		if(GuiButton((Rectangle){ 720, 10, 200, 28 }, "Clear Selection"))
+		{
+			// Clear all selected states
+			for(const auto& state : selectedStates)
+			{
+				mapEngine.setStateColor(state.id, defaultStateColor);
+			}
+			selectedStates.clear();
+			renderMapOverlay(mapEngine, mainMapTex, mapCam, mainMapTexWidth, mainMapTexHeight);
+		}
+
 		// Set selected country based on active index
 		if (CountrySelectorActive >= 0 && CountrySelectorActive < (int)countries.size())
 		{
@@ -343,9 +394,10 @@ int main()
 		}
 
 
+
 		//DrawTexture(heightmap, screenWidth - heightmap.width - 20, 20, WHITE);
 
-		DrawFPS(10, 10);
+		DrawFPS(screenWidth - 100, 15);
 
 		EndDrawing();
 	}

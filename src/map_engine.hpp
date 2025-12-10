@@ -9,6 +9,7 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <algorithm>
 
 #define MAPENGINE_ERR "Arpadica::MapEngine::Error: "
 
@@ -17,6 +18,8 @@ static constexpr double EARTH_RADIUS = 6378137.0; // WGS84 Earth radius in meter
 using json = nlohmann::json;
 
 using namespace std;
+
+static Color defaultStateColor = (Color){ 255, 255, 255, 200};
 
 struct State
 {
@@ -40,6 +43,11 @@ struct State
 	string nuts_level;
 
 };
+
+inline bool operator==(const State& a, const State& b) 
+{
+    return a.id == b.id;
+}
 
 class MapEngine
 {
@@ -295,7 +303,7 @@ class MapEngine
 						200
 					};*/
 
-					state.color = (Color){ 255, 255, 255, 200};
+					state.color = defaultStateColor;
 
 					//cout << "Loading geometry..." << endl;
 
